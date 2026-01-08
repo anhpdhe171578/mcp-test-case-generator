@@ -30,6 +30,23 @@ Chấp nhận 3 loại input và tự động chuẩn hóa:
    "Login functionality with username and password validation"
    ```
 
+### 📁 File Reading Capabilities (NEW!)
+MCP server giờ có thể đọc trực tiếp từ local filesystem:
+
+#### 4 Tools Available:
+1. **`generate_test_cases`** - Generate từ input text/object
+2. **`read_requirement_file`** - Đọc file requirement từ local
+3. **`scan_requirement_directory`** - Quét thư mục tìm requirement files
+4. **`generate_test_cases_from_file`** - Đọc file và generate test cases
+
+#### Supported File Formats:
+- **Markdown** (.md, .markdown)
+- **Text** (.txt, .text)
+- **JSON** (.json) - API specs, configurations
+- **YAML** (.yml, .yaml) - Config files
+- **Word** (.doc, .docx) - Requirement documents
+- **PDF** (.pdf) - Requirement specifications
+
 ### 📋 Output JSON cố định
 Mỗi test case có đủ các field bắt buộc:
 
@@ -87,43 +104,61 @@ Thêm vào MCP client config:
 }
 ```
 
-### 2. Generate test cases
+### 2. Sử dụng Tools
 
-Sử dụng tool `generate_test_cases` với input:
-
-#### User Story Example
+#### Method 1: Direct Input (Original)
 ```json
 {
   "input": "As a user I want to login so that I can access dashboard"
 }
 ```
 
-#### API Spec Example  
+#### Method 2: Read from File (NEW!)
 ```json
 {
-  "input": {
-    "endpoint": "/login",
-    "method": "POST",
-    "request": {
-      "username": "string",
-      "password": "string"
-    }
-  }
+  "file_path": "requirements/login-user-story.md"
 }
 ```
 
-#### Raw Text Example
+#### Method 3: Scan Directory (NEW!)
 ```json
 {
-  "input": "Login functionality with validation"
+  "directory_path": "./requirements",
+  "extensions": [".md", ".json", ".txt"]
 }
 ```
 
-### 3. Output structure
+#### Method 4: Generate from File (NEW!)
+```json
+{
+  "file_path": "api-specs/login-api.json"
+}
+```
+
+### 3. Example Usage in Claude Desktop
+
+```
+"Read the login requirements file and generate test cases"
+→ MCP sẽ tự động: scan → read → generate
+
+"Scan my requirements directory and list all files"
+→ MCP sẽ hiển thị danh sách file có thể xử lý
+
+"Generate test cases from this API spec file: ./api/login.json"
+→ MCP sẽ đọc file và generate test cases
+```
+
+### 4. Output structure
 
 ```json
 {
   "success": true,
+  "file_info": {
+    "path": "/path/to/file.md",
+    "type": "markdown",
+    "extension": ".md",
+    "size": 500
+  },
   "input_type": "user_story",
   "validation": {
     "isValid": true,
@@ -213,6 +248,8 @@ Tương tự TestRail, có thể import qua CSV format.
 1. **"Missing required fields"** → Kiểm tra input có đủ thông tin
 2. **"Invalid input type"** → Input không phải string/object hợp lệ  
 3. **"Validation failed"** → Output không đủ yêu cầu QA
+4. **"File not found"** → Kiểm tra path và permissions
+5. **"Unsupported file type"** → Check supported formats
 
 ### Debug Mode
 Server logs errors to stderr, check console output.
@@ -222,6 +259,7 @@ Server logs errors to stderr, check console output.
 - Processing time: < 1s cho input thông thường
 - Memory usage: < 50MB
 - Output size: ~10-50KB JSON
+- File reading: < 100ms cho files < 1MB
 
 ## 🤝 Contributing
 
@@ -237,3 +275,8 @@ MIT License
 ---
 
 **Made with ❤️ for QA Teams**
+
+## 🔗 Links
+
+- **GitHub Repository**: https://github.com/anhpdhe171578/mcp-test-case-generator
+- **Issues & Feature Requests**: https://github.com/anhpdhe171578/mcp-test-case-generator/issues
