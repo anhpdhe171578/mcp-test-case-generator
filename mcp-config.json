@@ -1,0 +1,20 @@
+{
+  "name": "test-case-generator",
+  "version": "1.0.0",
+  "description": "MCP Server configuration for Claude Desktop",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "keywords": ["mcp", "test-case", "qa", "testing", "automation"],
+  "author": "Test Case Generator MCP",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
