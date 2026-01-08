@@ -1,0 +1,18 @@
+{
+  "endpoint": "/api/auth/login",
+  "method": "POST",
+  "request": {
+    "username": "string",
+    "password": "string",
+    "remember_me": "boolean"
+  },
+  "response": {
+    "success": "boolean",
+    "token": "string",
+    "user": {
+      "id": "number",
+      "username": "string",
+      "role": "string"
+    }
+  }
+}

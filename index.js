@@ -6,6 +6,8 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { readFile, readdir, stat } from 'fs/promises';
+import { join, extname } from 'path';
 
 const server = new Server(
   {
@@ -512,6 +514,138 @@ function validateOutput(testCases) {
   };
 }
 
+// File reading functions
+async function readRequirementFile(filePath) {
+  try {
+    const absolutePath = resolvePath(filePath);
+    const stats = await stat(absolutePath);
+    
+    if (!stats.isFile()) {
+      throw new Error(`Path is not a file: ${absolutePath}`);
+    }
+    
+    const content = await readFile(absolutePath, 'utf-8');
+    const ext = extname(absolutePath).toLowerCase();
+    
+    return {
+      success: true,
+      path: absolutePath,
+      extension: ext,
+      size: stats.size,
+      content: content,
+      type: detectFileType(ext, content)
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+      path: filePath
+    };
+  }
+}
+
+function resolvePath(filePath) {
+  // Handle relative and absolute paths
+  if (filePath.startsWith('/') || /^[A-Za-z]:/.test(filePath)) {
+    return filePath;
+  }
+  
+  // Assume relative to current working directory
+  return join(process.cwd(), filePath);
+}
+
+function detectFileType(extension, content) {
+  const ext = extension.toLowerCase();
+  
+  // Check for common requirement file types
+  if (['.md', '.markdown'].includes(ext)) {
+    return 'markdown';
+  }
+  
+  if (['.txt', '.text'].includes(ext)) {
+    return 'text';
+  }
+  
+  if (['.json'].includes(ext)) {
+    return 'json';
+  }
+  
+  if (['.yml', '.yaml'].includes(ext)) {
+    return 'yaml';
+  }
+  
+  if (['.doc', '.docx'].includes(ext)) {
+    return 'word';
+  }
+  
+  if (['.pdf'].includes(ext)) {
+    return 'pdf';
+  }
+  
+  // Try to detect by content
+  if (content.includes('As a') && content.includes('I want') && content.includes('So that')) {
+    return 'user_story';
+  }
+  
+  if (content.includes('endpoint') || content.includes('method') || content.includes('request')) {
+    return 'api_spec';
+  }
+  
+  return 'unknown';
+}
+
+async function scanRequirementDirectory(directoryPath, options = {}) {
+  try {
+    const absolutePath = resolvePath(directoryPath);
+    const stats = await stat(absolutePath);
+    
+    if (!stats.isDirectory()) {
+      throw new Error(`Path is not a directory: ${absolutePath}`);
+    }
+    
+    const files = await readdir(absolutePath);
+    const result = {
+      success: true,
+      path: absolutePath,
+      files: [],
+      total_files: 0
+    };
+    
+    const supportedExtensions = options.extensions || [
+      '.md', '.txt', '.json', '.yml', '.yaml', '.doc', '.docx', '.pdf'
+    ];
+    
+    for (const file of files) {
+      const filePath = join(absolutePath, file);
+      const fileStats = await stat(filePath);
+      
+      if (fileStats.isFile()) {
+        const ext = extname(filePath).toLowerCase();
+        
+        if (supportedExtensions.includes(ext)) {
+          result.files.push({
+            name: file,
+            path: filePath,
+            extension: ext,
+            size: fileStats.size,
+            modified: fileStats.mtime
+          });
+        }
+      }
+    }
+    
+    result.total_files = result.files.length;
+    return result;
+    
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+      path: directoryPath
+    };
+  }
+}
+
 // Tool definitions
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -528,6 +662,54 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             }
           },
           required: ['input']
+        }
+      },
+      {
+        name: 'read_requirement_file',
+        description: 'Read requirement file from local filesystem (supports .md, .txt, .json, .yml, .yaml, .doc, .docx, .pdf)',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file_path: {
+              type: 'string',
+              description: 'Path to requirement file (relative or absolute)'
+            }
+          },
+          required: ['file_path']
+        }
+      },
+      {
+        name: 'scan_requirement_directory',
+        description: 'Scan directory for requirement files and list them',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            directory_path: {
+              type: 'string',
+              description: 'Path to directory containing requirement files'
+            },
+            extensions: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'File extensions to scan for (default: .md, .txt, .json, .yml, .yaml, .doc, .docx, .pdf)',
+              default: ['.md', '.txt', '.json', '.yml', '.yaml', '.doc', '.docx', '.pdf']
+            }
+          },
+          required: ['directory_path']
+        }
+      },
+      {
+        name: 'generate_test_cases_from_file',
+        description: 'Read requirement file and generate test cases from its content',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file_path: {
+              type: 'string',
+              description: 'Path to requirement file'
+            }
+          },
+          required: ['file_path']
         }
       }
     ]
@@ -560,6 +742,137 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: 'text',
             text: JSON.stringify({
               success: true,
+              input_type: normalizedInput.type,
+              validation: validation,
+              test_cases: testCases,
+              summary: {
+                total_cases: Object.values(testCases).flat().length,
+                by_section: {
+                  positive: testCases.positive.length,
+                  negative: testCases.negative.length,
+                  boundary: testCases.boundary.length,
+                  edge: testCases.edge.length
+                }
+              }
+            }, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error.message,
+              details: error.stack
+            }, null, 2)
+          }
+        ]
+      };
+    }
+  }
+
+  if (name === 'read_requirement_file') {
+    try {
+      const result = await readRequirementFile(args.file_path);
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error.message,
+              details: error.stack
+            }, null, 2)
+          }
+        ]
+      };
+    }
+  }
+
+  if (name === 'scan_requirement_directory') {
+    try {
+      const result = await scanRequirementDirectory(args.directory_path, {
+        extensions: args.extensions
+      });
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error.message,
+              details: error.stack
+            }, null, 2)
+          }
+        ]
+      };
+    }
+  }
+
+  if (name === 'generate_test_cases_from_file') {
+    try {
+      // Step 1: Read the file
+      const fileResult = await readRequirementFile(args.file_path);
+      
+      if (!fileResult.success) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: false,
+                error: `Failed to read file: ${fileResult.error}`
+              }, null, 2)
+            }
+          ]
+        };
+      }
+      
+      // Step 2: Normalize input from file content
+      const normalizedInput = normalizeInput(fileResult.content);
+      
+      // Step 3: Generate test cases
+      let testCases = generateTestCases(normalizedInput);
+      
+      // Step 4: Validate output
+      const validation = validateOutput(testCases);
+      
+      // Step 5: Return comprehensive result
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: true,
+              file_info: {
+                path: fileResult.path,
+                type: fileResult.type,
+                extension: fileResult.extension,
+                size: fileResult.size
+              },
               input_type: normalizedInput.type,
               validation: validation,
               test_cases: testCases,
