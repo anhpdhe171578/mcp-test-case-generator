@@ -33,11 +33,12 @@ Chấp nhận 3 loại input và tự động chuẩn hóa:
 ### 📁 File Reading Capabilities (NEW!)
 MCP server giờ có thể đọc trực tiếp từ local filesystem:
 
-#### 4 Tools Available:
+#### 5 Tools Available:
 1. **`generate_test_cases`** - Generate từ input text/object
 2. **`read_requirement_file`** - Đọc file requirement từ local
 3. **`scan_requirement_directory`** - Quét thư mục tìm requirement files
 4. **`generate_test_cases_from_file`** - Đọc file và generate test cases
+5. **`export_to_excel`** - Export test cases sang file Excel (.xlsx) **(NEW!)**
 
 #### Supported File Formats:
 - **Markdown** (.md, .markdown)
@@ -135,6 +136,19 @@ Thêm vào MCP client config:
 }
 ```
 
+#### Method 5: Export to Excel (NEW!)
+```json
+{
+  "test_cases": {
+    "positive": [...],
+    "negative": [...],
+    "boundary": [...],
+    "edge": [...]
+  },
+  "output_path": "./test-cases.xlsx"
+}
+```
+
 ### 3. Example Usage in Claude Desktop
 
 ```
@@ -146,6 +160,12 @@ Thêm vào MCP client config:
 
 "Generate test cases from this API spec file: ./api/login.json"
 → MCP sẽ đọc file và generate test cases
+
+"Export the generated test cases to Excel file"
+→ MCP sẽ tạo file Excel với format chuẩn
+
+"Generate test cases from requirements and export to Excel"
+→ MCP sẽ generate và export trong 1 bước
 ```
 
 ### 4. Output structure
@@ -242,6 +262,27 @@ Copy-paste test case vào TestRail với format:
 ### Jira/Xray
 Tương tự TestRail, có thể import qua CSV format.
 
+### 📊 Excel Export (NEW!)
+Export test cases sang file Excel với format chuẩn:
+
+#### Excel Columns:
+- **Test Case ID**: Unique identifier (TC_LOGIN_001)
+- **Title**: Test case description
+- **Type**: positive/negative/boundary/edge
+- **Priority**: High/Medium/Low
+- **Precondition**: Conditions before test
+- **Steps**: Test steps (newline separated)
+- **Expected Result**: Expected outcome
+- **Test Data**: Test data in JSON format
+- **Section**: Test case category
+
+#### Features:
+- **Auto column widths** cho readability
+- **Structured format** ready for import
+- **All 4 test sections** trong 1 sheet
+- **JSON test data** preserved
+- **Professional formatting**
+
 ## 🐛 Troubleshooting
 
 ### Common Issues
@@ -250,6 +291,7 @@ Tương tự TestRail, có thể import qua CSV format.
 3. **"Validation failed"** → Output không đủ yêu cầu QA
 4. **"File not found"** → Kiểm tra path và permissions
 5. **"Unsupported file type"** → Check supported formats
+6. **"Excel export failed"** → Kiểm tra write permissions và disk space
 
 ### Debug Mode
 Server logs errors to stderr, check console output.
@@ -260,6 +302,7 @@ Server logs errors to stderr, check console output.
 - Memory usage: < 50MB
 - Output size: ~10-50KB JSON
 - File reading: < 100ms cho files < 1MB
+- **Excel export**: < 500ms cho 50 test cases
 
 ## 🤝 Contributing
 

@@ -6,8 +6,9 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { readFile, readdir, stat } from 'fs/promises';
+import { readFile, readdir, stat, writeFile } from 'fs/promises';
 import { join, extname } from 'path';
+import * as XLSX from 'xlsx';
 
 const server = new Server(
   {
@@ -711,11 +712,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ['file_path']
         }
+      },
+      {
+        name: 'export_to_excel',
+        description: 'Export generated test cases to Excel file (.xlsx format)',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            test_cases: {
+              type: 'object',
+              description: 'Test cases object with positive, negative, boundary, edge arrays'
+            },
+            output_path: {
+              type: 'string',
+              description: 'Output Excel file path (e.g., ./test-cases.xlsx)'
+            }
+          },
+          required: ['test_cases', 'output_path']
+        }
       }
     ]
   };
 });
 
+// ...
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
@@ -905,8 +925,118 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  if (name === 'export_to_excel') {
+    try {
+      const result = await exportToExcel(args.test_cases, args.output_path);
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error.message,
+              details: error.stack
+            }, null, 2)
+          }
+        ]
+      };
+    }
+  }
+
   throw new Error(`Unknown tool: ${name}`);
 });
+
+// Export test cases to Excel
+async function exportToExcel(testCases, outputPath) {
+  try {
+    // Create workbook
+    const workbook = XLSX.utils.book_new();
+    
+    // Prepare data for Excel
+    const excelData = [];
+    
+    // Add header row
+    excelData.push([
+      'Test Case ID',
+      'Title',
+      'Type',
+      'Priority',
+      'Precondition',
+      'Steps',
+      'Expected Result',
+      'Test Data',
+      'Section'
+    ]);
+    
+    // Add test cases from all sections
+    const sections = ['positive', 'negative', 'boundary', 'edge'];
+    
+    sections.forEach(section => {
+      if (testCases[section] && Array.isArray(testCases[section])) {
+        testCases[section].forEach(testCase => {
+          excelData.push([
+            testCase.id || '',
+            testCase.title || '',
+            testCase.type || '',
+            testCase.priority || '',
+            testCase.precondition || '',
+            Array.isArray(testCase.steps) ? testCase.steps.join('\n') : (testCase.steps || ''),
+            testCase.expected_result || '',
+            typeof testCase.test_data === 'object' ? JSON.stringify(testCase.test_data) : (testCase.test_data || ''),
+            section.charAt(0).toUpperCase() + section.slice(1)
+          ]);
+        });
+      }
+    });
+    
+    // Create worksheet
+    const worksheet = XLSX.utils.aoa_to_sheet(excelData);
+    
+    // Set column widths
+    const colWidths = [
+      { wch: 15 }, // Test Case ID
+      { wch: 40 }, // Title
+      { wch: 12 }, // Type
+      { wch: 10 }, // Priority
+      { wch: 30 }, // Precondition
+      { wch: 50 }, // Steps
+      { wch: 40 }, // Expected Result
+      { wch: 30 }, // Test Data
+      { wch: 12 }  // Section
+    ];
+    worksheet['!cols'] = colWidths;
+    
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Test Cases');
+    
+    // Write file
+    XLSX.writeFile(workbook, outputPath);
+    
+    return {
+      success: true,
+      path: outputPath,
+      total_cases: excelData.length - 1, // Exclude header
+      file_size: await (await stat(outputPath)).size
+    };
+    
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+      details: error.stack
+    };
+  }
+}
 
 async function main() {
   const transport = new StdioServerTransport();
