@@ -33,12 +33,13 @@ Chấp nhận 3 loại input và tự động chuẩn hóa:
 ### 📁 File Reading Capabilities (NEW!)
 MCP server giờ có thể đọc trực tiếp từ local filesystem:
 
-#### 5 Tools Available:
+#### 6 Tools Available:
 1. **`generate_test_cases`** - Generate từ input text/object
 2. **`read_requirement_file`** - Đọc file requirement từ local
 3. **`scan_requirement_directory`** - Quét thư mục tìm requirement files
 4. **`generate_test_cases_from_file`** - Đọc file và generate test cases
-5. **`export_to_excel`** - Export test cases sang file Excel (.xlsx) **(NEW!)**
+5. **`export_to_excel`** - Export test cases sang file Excel (.xlsx)
+6. **`generate_automation_tests`** - Generate automation test code (Playwright) **(NEW!)**
 
 #### Supported File Formats:
 - **Markdown** (.md, .markdown)
@@ -149,6 +150,21 @@ Thêm vào MCP client config:
 }
 ```
 
+#### Method 6: Generate Automation Tests (NEW!)
+```json
+{
+  "test_cases": {
+    "positive": [...],
+    "negative": [...],
+    "boundary": [...],
+    "edge": [...]
+  },
+  "framework": "playwright",
+  "language": "javascript",
+  "base_url": "https://example.com"
+}
+```
+
 ### 3. Example Usage in Claude Desktop
 
 ```
@@ -166,6 +182,9 @@ Thêm vào MCP client config:
 
 "Generate test cases from requirements and export to Excel"
 → MCP sẽ generate và export trong 1 bước
+
+"Generate automation tests from the test cases"
+→ MCP sẽ tạo Playwright test code sẵn sàng chạy
 ```
 
 ### 4. Output structure
@@ -283,6 +302,63 @@ Export test cases sang file Excel với format chuẩn:
 - **JSON test data** preserved
 - **Professional formatting**
 
+## 🤖 Automation Test Generation (NEW!)
+Generate automation test code từ test cases với Playwright:
+
+### Supported Frameworks
+- **Playwright** + JavaScript (hiện tại)
+- Sắp tới: Cypress, Selenium WebDriver
+
+### Generated Code Features
+- **Smart step conversion** - Tự động chuyển test steps thành Playwright commands
+- **Test data substitution** - Tự động sử dụng test data từ test cases
+- **Custom helpers** - Login, toast verification, dashboard waiting
+- **Data-testid selectors** - Best practice cho stable selectors
+- **Comprehensive assertions** - Mọi expected result được convert thành assertions
+
+### Sample Generated Test
+```javascript
+test('Login with valid credentials', async ({ page }) => {
+  // Step 1: Open login page
+  await page.goto('/login');
+  
+  // Step 2: Enter valid username
+  await page.fill('[data-testid="username"]', 'valid_user');
+  
+  // Step 3: Enter valid password
+  await page.fill('[data-testid="password"]', 'valid_pass');
+  
+  // Step 4: Click Login
+  await page.click('[data-testid="login-button"]');
+  
+  // Expected Result: User is redirected to dashboard
+  await helpers.waitForDashboard(page);
+});
+```
+
+### Usage
+1. Generate test cases từ requirements
+2. Generate automation tests từ test cases
+3. Install dependencies: `npm install @playwright/test`
+4. Run tests: `npx playwright test`
+
+### Output Structure
+```json
+{
+  "framework": "playwright",
+  "language": "javascript",
+  "base_url": "https://example.com",
+  "dependencies": ["@playwright/test"],
+  "setup": "// Playwright configuration...",
+  "tests": {
+    "positive": [...],
+    "negative": [...],
+    "boundary": [...],
+    "edge": [...]
+  }
+}
+```
+
 ## 🐛 Troubleshooting
 
 ### Common Issues
@@ -292,6 +368,7 @@ Export test cases sang file Excel với format chuẩn:
 4. **"File not found"** → Kiểm tra path và permissions
 5. **"Unsupported file type"** → Check supported formats
 6. **"Excel export failed"** → Kiểm tra write permissions và disk space
+7. **"Automation generation failed"** → Kiểm tra test case structure và steps format
 
 ### Debug Mode
 Server logs errors to stderr, check console output.
@@ -303,6 +380,7 @@ Server logs errors to stderr, check console output.
 - Output size: ~10-50KB JSON
 - File reading: < 100ms cho files < 1MB
 - **Excel export**: < 500ms cho 50 test cases
+- **Automation generation**: < 200ms cho 20 test cases
 
 ## 🤝 Contributing
 

@@ -730,6 +730,37 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ['test_cases', 'output_path']
         }
+      },
+      {
+        name: 'generate_automation_tests',
+        description: 'Generate automation test code from test cases (supports Playwright)',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            test_cases: {
+              type: 'object',
+              description: 'Test cases object with positive, negative, boundary, edge arrays'
+            },
+            framework: {
+              type: 'string',
+              enum: ['playwright'],
+              description: 'Automation framework (currently supports Playwright)',
+              default: 'playwright'
+            },
+            language: {
+              type: 'string',
+              enum: ['javascript'],
+              description: 'Programming language (currently supports JavaScript)',
+              default: 'javascript'
+            },
+            base_url: {
+              type: 'string',
+              description: 'Base URL for tests (e.g., https://example.com)',
+              default: 'https://example.com'
+            }
+          },
+          required: ['test_cases']
+        }
       }
     ]
   };
@@ -953,6 +984,57 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
+  if (name === 'generate_automation_tests') {
+    try {
+      const options = {
+        framework: args.framework || 'playwright',
+        language: args.language || 'javascript',
+        baseUrl: args.base_url || 'https://example.com'
+      };
+      
+      const result = generateAutomationTests(args.test_cases, options);
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: true,
+              framework: result.framework,
+              language: result.language,
+              base_url: result.baseUrl,
+              dependencies: result.dependencies,
+              setup: result.setup,
+              tests: result.tests,
+              summary: {
+                total_tests: Object.values(result.tests).flat().length,
+                by_section: {
+                  positive: result.tests.positive ? result.tests.positive.length : 0,
+                  negative: result.tests.negative ? result.tests.negative.length : 0,
+                  boundary: result.tests.boundary ? result.tests.boundary.length : 0,
+                  edge: result.tests.edge ? result.tests.edge.length : 0
+                }
+              }
+            }, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error.message,
+              details: error.stack
+            }, null, 2)
+          }
+        ]
+      };
+    }
+  }
+
   throw new Error(`Unknown tool: ${name}`);
 });
 
@@ -1038,6 +1120,211 @@ async function exportToExcel(testCases, outputPath) {
   }
 }
 
+// Generate automation test code using Playwright
+function generateAutomationTests(testCases, options = {}) {
+  const framework = options.framework || 'playwright';
+  const language = options.language || 'javascript';
+  const baseUrl = options.baseUrl || 'https://example.com';
+  
+  const automationTests = {
+    framework,
+    language,
+    baseUrl,
+    tests: {},
+    setup: '',
+    dependencies: []
+  };
+
+  // Generate setup code based on framework
+  if (framework === 'playwright' && language === 'javascript') {
+    automationTests.setup = generatePlaywrightSetup();
+    automationTests.dependencies = ['@playwright/test'];
+  }
+
+  // Generate test code for each section
+  const sections = ['positive', 'negative', 'boundary', 'edge'];
+  
+  sections.forEach(section => {
+    if (testCases[section] && Array.isArray(testCases[section])) {
+      automationTests.tests[section] = testCases[section].map(testCase => {
+        return generateSingleTest(testCase, framework, language, baseUrl);
+      });
+    }
+  });
+
+  return automationTests;
+}
+
+// Generate Playwright setup code
+function generatePlaywrightSetup() {
+  return `// Playwright Test Configuration
+import { test, expect } from '@playwright/test';
+
+// Test configuration
+const config = {
+  baseURL: 'https://example.com',
+  timeout: 30000,
+  retries: 2
+};
+
+// Custom test helpers
+const helpers = {
+  async login(page, username, password) {
+    await page.goto('/login');
+    await page.fill('[data-testid="username"]', username);
+    await page.fill('[data-testid="password"]', password);
+    await page.click('[data-testid="login-button"]');
+  },
+  
+  async verifyToast(page, message) {
+    await expect(page.locator('.toast')).toContainText(message);
+  },
+  
+  async waitForDashboard(page) {
+    await expect(page.locator('h1')).toContainText('Dashboard');
+  }
+};`;
+}
+
+// Generate single test case code
+function generateSingleTest(testCase, framework, language, baseUrl) {
+  const { id, title, steps, expected_result, test_data, type } = testCase;
+  
+  if (framework === 'playwright' && language === 'javascript') {
+    return generatePlaywrightTest(id, title, steps, expected_result, test_data, type, baseUrl);
+  }
+  
+  return `// Test generation not implemented for ${framework} with ${language}`;
+}
+
+// Generate Playwright test code
+function generatePlaywrightTest(id, title, steps, expectedResult, testData, type, baseUrl) {
+  const testName = title.replace(/[^a-zA-Z0-9]/g, ' ').trim().replace(/\s+/g, ' ');
+  const testFunction = `test('${testName}', async ({ page }) => {`;
+  
+  let testCode = testFunction + '\n';
+  
+  // Add precondition comment if available
+  if (testCase.precondition) {
+    testCode += `  // Precondition: ${testCase.precondition}\n`;
+  }
+  
+  // Generate step code
+  if (Array.isArray(steps)) {
+    steps.forEach((step, index) => {
+      const stepCode = convertStepToPlaywright(step, testData, type);
+      if (stepCode) {
+        testCode += `  // Step ${index + 1}: ${step}\n`;
+        testCode += `  ${stepCode}\n\n`;
+      }
+    });
+  }
+  
+  // Add expectation
+  const expectationCode = convertExpectationToPlaywright(expectedResult, type);
+  if (expectationCode) {
+    testCode += `  // Expected Result: ${expectedResult}\n`;
+    testCode += `  ${expectationCode}\n`;
+  }
+  
+  testCode += '});';
+  
+  return testCode;
+}
+
+// Convert test step to Playwright code
+function convertStepToPlaywright(step, testData, testType) {
+  const stepLower = step.toLowerCase();
+  
+  // Login steps
+  if (stepLower.includes('login') || stepLower.includes('enter username') || stepLower.includes('enter password')) {
+    if (testData && testData.username && testData.password) {
+      return `await helpers.login(page, '${testData.username}', '${testData.password}');`;
+    }
+  }
+  
+  // Navigation steps
+  if (stepLower.includes('open') || stepLower.includes('navigate') || stepLower.includes('go to')) {
+    const match = step.match(/(?:open|navigate|go to)\s+(.+?)(?:\s+page|$)/i);
+    if (match) {
+      const pageName = match[1].toLowerCase().trim();
+      const path = pageName === 'login' ? '/login' : pageName === 'dashboard' ? '/dashboard' : `/${pageName}`;
+      return `await page.goto('${path}');`;
+    }
+  }
+  
+  // Click steps
+  if (stepLower.includes('click')) {
+    const match = step.match(/click\s+(.+?)(?:\s+button|$)/i);
+    if (match) {
+      const buttonName = match[1].toLowerCase().trim();
+      return `await page.click('[data-testid="${buttonName}-button"]');`;
+    }
+  }
+  
+  // Fill/Enter steps
+  if (stepLower.includes('enter') || stepLower.includes('fill') || stepLower.includes('type')) {
+    const match = step.match(/(?:enter|fill|type)\s+(.+?)\s+(?:in|into)?\s*(.+?)(?:\s+field|$)/i);
+    if (match) {
+      const value = match[1];
+      const fieldName = match[2].toLowerCase().trim();
+      
+      // Handle test data substitution
+      let actualValue = value;
+      if (testData) {
+        Object.keys(testData).forEach(key => {
+          if (value.toLowerCase().includes(key)) {
+            actualValue = testData[key];
+          }
+        });
+      }
+      
+      return `await page.fill('[data-testid="${fieldName}"]', '${actualValue}');`;
+    }
+  }
+  
+  // Verify steps
+  if (stepLower.includes('verify') || stepLower.includes('check')) {
+    const match = step.match(/(?:verify|check)\s+(.+?)(?:\s+is|exists|displays)?/i);
+    if (match) {
+      const element = match[1].toLowerCase().trim();
+      return `await expect(page.locator('[data-testid="${element}"]')).toBeVisible();`;
+    }
+  }
+  
+  // Default step
+  return `// TODO: Implement step - ${step}`;
+}
+
+// Convert expected result to Playwright assertion
+function convertExpectationToPlaywright(expectedResult, testType) {
+  const resultLower = expectedResult.toLowerCase();
+  
+  // Success cases
+  if (resultLower.includes('redirect') || resultLower.includes('dashboard')) {
+    return `await helpers.waitForDashboard(page);`;
+  }
+  
+  if (resultLower.includes('success') || resultLower.includes('200')) {
+    return `await expect(page.locator('.success-message')).toBeVisible();`;
+  }
+  
+  // Error cases
+  if (resultLower.includes('error') || resultLower.includes('invalid') || resultLower.includes('400')) {
+    return `await expect(page.locator('.error-message')).toBeVisible();`;
+  }
+  
+  if (resultLower.includes('message')) {
+    const match = expectedResult.match(/["']([^"']+)["']/);
+    if (match) {
+      return `await helpers.verifyToast(page, '${match[1]}');`;
+    }
+  }
+  
+  // Default expectation
+  return `// TODO: Implement expectation - ${expectedResult}`;
+}
+
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
@@ -1048,3 +1335,6 @@ main().catch((error) => {
   console.error('Server error:', error);
   process.exit(1);
 });
+
+// Export functions for testing
+export { generateAutomationTests, exportToExcel };
