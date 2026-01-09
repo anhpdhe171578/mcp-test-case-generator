@@ -108,12 +108,16 @@ Thêm vào MCP client config:
 
 ### 2. Sử dụng Tools
 
-#### Method 1: Direct Input (Original)
+#### Method 1: Direct Input (Auto Excel Export - NEW DEFAULT!)
 ```json
 {
-  "input": "As a user I want to login so that I can access dashboard"
+  "input": "As a user I want to login so that I can access dashboard",
+  "auto_export_excel": true,
+  "excel_path": "./test-cases-auto.xlsx"
 }
 ```
+
+**🎉 NEW DEFAULT: Auto Excel Export enabled!** Test cases sẽ tự động được export sang Excel file.
 
 #### Method 2: Read from File (NEW!)
 ```json
@@ -182,6 +186,15 @@ Thêm vào MCP client config:
 
 "Generate test cases from requirements and export to Excel"
 → MCP sẽ generate và export trong 1 bước
+
+"Generate test cases from this requirement"
+→ MCP sẽ generate test cases VÀ tự động export Excel
+
+"Generate test cases but disable Excel export"
+→ MCP chỉ generate test cases, không export Excel
+
+"Generate test cases and save to custom Excel path"
+→ MCP sẽ generate và export đến file chỉ định
 
 "Generate automation tests from the test cases"
 → MCP sẽ tạo Playwright test code sẵn sàng chạy
@@ -301,6 +314,65 @@ Export test cases sang file Excel với format chuẩn:
 - **All 4 test sections** trong 1 sheet
 - **JSON test data** preserved
 - **Professional formatting**
+
+## 🚀 Auto Excel Export (NEW DEFAULT!)
+**Tính năng mới: Tự động export Excel khi generate test cases!**
+
+### Default Behavior
+- **Auto Export: ENABLED** theo mặc định
+- **File Path:** `./test-cases-auto.xlsx`
+- **Format:** 9 columns với professional formatting
+
+### Usage Options
+
+#### 1. Auto Export (Default)
+```json
+{
+  "input": "As a user I want to login",
+  // auto_export_excel: true (mặc định)
+  // excel_path: "./test-cases-auto.xlsx" (mặc định)
+}
+```
+
+#### 2. Disable Auto Export
+```json
+{
+  "input": "As a user I want to login",
+  "auto_export_excel": false
+}
+```
+
+#### 3. Custom Excel Path
+```json
+{
+  "input": "As a user I want to login",
+  "excel_path": "./custom-test-cases.xlsx"
+}
+```
+
+### Output Structure (Updated)
+```json
+{
+  "success": true,
+  "input_type": "user_story",
+  "validation": { "isValid": true, "errors": [] },
+  "test_cases": { ... },
+  "excel_export": {
+    "success": true,
+    "path": "./test-cases-auto.xlsx",
+    "total_cases": 12,
+    "file_size": 20480
+  },
+  "auto_export_enabled": true,
+  "summary": { ... }
+}
+```
+
+### Benefits
+- **Zero configuration** - Auto export sẵn có
+- **One-step workflow** - Generate + Export trong 1 call
+- **Customizable** - Có thể disable hoặc thay đổi path
+- **Error handling** - Excel export không ảnh hưởng đến test case generation
 
 ## 🤖 Automation Test Generation (NEW!)
 Generate automation test code từ test cases với Playwright:

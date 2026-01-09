@@ -653,13 +653,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: 'generate_test_cases',
-        description: 'Generate comprehensive test cases from requirements, user stories, or API specs',
+        description: 'Generate comprehensive test cases from requirements, user stories, or API specs (with auto Excel export)',
         inputSchema: {
           type: 'object',
           properties: {
             input: {
               type: ['string', 'object'],
               description: 'Input can be: User Story text, API spec object, or raw requirement text'
+            },
+            auto_export_excel: {
+              type: 'boolean',
+              description: 'Automatically export test cases to Excel file (default: true)',
+              default: true
+            },
+            excel_path: {
+              type: 'string',
+              description: 'Excel file output path (default: ./test-cases-auto.xlsx)',
+              default: './test-cases-auto.xlsx'
             }
           },
           required: ['input']
@@ -786,7 +796,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // In a real implementation, you might want to regenerate here
       }
       
-      // Step 4: Return structured output
+      // Step 4: Auto export to Excel (if enabled)
+      let excelExport = null;
+      const autoExportExcel = args.auto_export_excel !== false; // Default to true
+      const excelPath = args.excel_path || './test-cases-auto.xlsx';
+      
+      if (autoExportExcel) {
+        try {
+          excelExport = await exportToExcel(testCases, excelPath);
+        } catch (excelError) {
+          console.error('Excel export failed:', excelError.message);
+          excelExport = {
+            success: false,
+            error: excelError.message
+          };
+        }
+      }
+      
+      // Step 5: Return structured output
       return {
         content: [
           {
@@ -796,6 +823,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               input_type: normalizedInput.type,
               validation: validation,
               test_cases: testCases,
+              excel_export: excelExport,
+              auto_export_enabled: autoExportExcel,
               summary: {
                 total_cases: Object.values(testCases).flat().length,
                 by_section: {
